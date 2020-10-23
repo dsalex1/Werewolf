@@ -1,0 +1,86 @@
+villager
+witch
+werewolf
+seer
+amor
+mayor
+
+game create:
+
+-first join name, select cards 
+-other join name
+
+start game (all joined, cards slected):
+	-randomly assign
+	-scheduler
+
+interface:
+	
+	-day and night theme
+	all roles:
+		pictures + description
+		elections
+
+	villager:
+		none
+	witch:
+		deathmarked, option to heal
+		option to kill
+	werewolf:
+		other werewolfes
+		voting
+	seer:
+		seen roles
+	amor:
+		none
+	
+
+	lovers (high prio):
+		each other (names)	
+	mayor:
+		role marker
+	dead:
+		all da things
+
+win condition:
+	roles:
+		villager:
+			all werewolf dead
+		witch:
+			villager
+		werewolf:
+			all non werewolf dead
+		seer:
+			villager
+		amor:
+			villager
+	extensions:
+		lovers (high prio):
+			all non lovers dead
+		mayor:
+			none
+		dead:
+			none
+
+        
+schedule:
+	-first day
+		day:
+			mayor
+		night:
+			amor
+			seer
+			werewolf
+			witch
+	-other days
+		day:
+			announcement of death
+			win conditions
+			mayor (if dead)
+			election
+			win conditions
+		night:
+			seer
+			werewolf
+			witch
+	

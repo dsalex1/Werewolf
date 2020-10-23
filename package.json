@@ -1,0 +1,67 @@
+{
+    "name": "werewolf",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "serve": "vue-cli-service serve",
+        "build": "vue-cli-service build",
+        "lint": "vue-cli-service lint"
+    },
+    "dependencies": {
+        "core-js": "^3.6.5",
+        "cors": "^2.8.5",
+        "register-service-worker": "^1.7.1",
+        "swing": "^3.1.4",
+        "vue": "^2.6.11",
+        "vue-class-component": "^7.2.3",
+        "vue-property-decorator": "^8.4.2",
+        "vue-router": "^3.2.0",
+        "vue-swing": "0.0.10",
+        "vue-touch": "^2.0.0-beta.4"
+    },
+    "devDependencies": {
+        "@types/lodash": "^4.14.162",
+        "@typescript-eslint/eslint-plugin": "^2.34.0",
+        "@typescript-eslint/parser": "^2.34.0",
+        "@vue/cli-plugin-babel": "^4.5.7",
+        "@vue/cli-plugin-eslint": "^4.5.7",
+        "@vue/cli-plugin-pwa": "^4.5.7",
+        "@vue/cli-plugin-router": "^4.5.7",
+        "@vue/cli-plugin-typescript": "^4.5.7",
+        "@vue/cli-service": "^4.5.7",
+        "@vue/eslint-config-prettier": "^6.0.0",
+        "@vue/eslint-config-typescript": "^5.1.0",
+        "eslint": "^6.8.0",
+        "eslint-plugin-prettier": "^3.1.4",
+        "eslint-plugin-vue": "^6.2.2",
+        "node-sass": "^4.14.1",
+        "prettier": "^1.19.1",
+        "sass-loader": "^8.0.2",
+        "typescript": "^3.9.7",
+        "vue-template-compiler": "^2.6.12"
+    },
+    "eslintConfig": {
+        "root": true,
+        "env": {
+            "node": true
+        },
+        "plugins": [
+            "@typescript-eslint/eslint-plugin"
+        ],
+        "extends": [
+            "plugin:vue/essential",
+            "eslint:recommended",
+            "@vue/typescript/recommended"
+        ],
+        "parserOptions": {
+            "ecmaVersion": 2020,
+            "parser": "@typescript-eslint/parser"
+        },
+        "rules": {}
+    },
+    "browserslist": [
+        "> 1%",
+        "last 2 versions",
+        "not dead"
+    ]
+}
