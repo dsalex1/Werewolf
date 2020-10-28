@@ -64,7 +64,7 @@ body,
 .btn-primary:hover,
 .btn-primary:focus,
 .btn-primary.focus {
-    transition: background-color 8s ease, color 2s ease, border-color 8s ease !important;
+    transition: background-color 4s ease, color 2s ease, border-color 4s ease !important;
     transition-delay: 0 !important;
 }
 .card-header,
