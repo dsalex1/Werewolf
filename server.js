@@ -55,6 +55,7 @@ var __spreadArrays = (this && this.__spreadArrays) || function () {
 };
 exports.__esModule = true;
 /* eslint-disable @typescript-eslint/no-var-requires */
+//run: tsc-watch server.ts --onSuccess "node server.js"
 console.clear();
 var express = require("express");
 var cors = require("cors");
@@ -72,30 +73,132 @@ console.log = function () {
 };
 app.options("*", cors());
 app.use(express.json());
+var readline = require("readline");
+var rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
 var newUsers = [];
 var players = [
-/*
-{ id: "09007728297802164", name: "p2", state: "player", role: "witch", inLove: true },
-{ id: "5563432431161994", name: "p3", state: "player", role: "werewolf", inLove: true },
-{ id: "6473568877355735", name: "creator", state: "player", role: "seer", mayor: true, deathmarked: true },
-{ id: "6305879575129216", name: "p1", state: "player", role: "amor" }
-*/
+    { id: "20032798064716228", name: "creator", state: "player", role: "werewolf" },
+    //{ id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
+    { id: "39065619909131755", name: "p2", state: "player", role: "werewolf" },
+    { id: "3934182564683921", name: "p3", state: "player", role: "villager" }
 ];
 var dead = [];
 var gameCreation = {
     cards: {
-        werewolf: 0,
-        villager: 0,
+        werewolf: 3,
+        villager: 1,
         amor: 0,
         seer: 0,
         witch: 0
     },
-    started: false
+    started: true
 };
 var voting = { lockedIn: undefined, votes: [] };
-var currentEvent = "MAJOR";
 var dayTime = "day";
 var hasWon = "";
+var isFirstRound = true;
+var currentEvent = "MAJOR";
+function skippingEvent(event) {
+    //if none left alive (or there in the first place) skip
+    switch (event) {
+        case "AMOR":
+        case "WEREWOLF":
+        case "WITCH":
+        case "SEER":
+            if (!players.some(function (p) { return p.role.toUpperCase() == event; }))
+                return true;
+    }
+    //role/event specific rules
+    switch (event) {
+        case "MAJOR":
+            if (players.some(function (p) { return p.mayor; }))
+                return true;
+            break;
+        case "ELECTION":
+            if (isFirstRound)
+                return true;
+            break;
+        case "AMOR":
+            if (!isFirstRound)
+                return true;
+            break;
+        case "WITCH":
+            if (players.find(function (p) { return p.role == "witch"; }).hasHealed && players.find(function (p) { return p.role == "witch"; }).hasKilled)
+                return true;
+            break;
+    }
+    return false;
+}
+function getNextScheduleEvent(event) {
+    var schedule = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "ANOUNCEMENT"];
+    var currentScheduleIndex = schedule.findIndex(function (e) { return e == event; });
+    var nextScheduleEvent = schedule[(currentScheduleIndex + 1) % schedule.length];
+    //after the first werewolf the first round is basically over
+    if (event == "WEREWOLF" && isFirstRound)
+        isFirstRound = false;
+    if (skippingEvent(nextScheduleEvent)) {
+        return getNextScheduleEvent(nextScheduleEvent);
+    }
+    else
+        return nextScheduleEvent;
+}
+function nextScheduleEvent() {
+    return __awaiter(this, void 0, void 0, function () {
+        var nextEvent;
+        return __generator(this, function (_a) {
+            nextEvent = getNextScheduleEvent(currentEvent);
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+            if (nextEvent == "ANOUNCEMENT")
+                computeDead();
+            if (nextEvent == "ANOUNCEMENT")
+                dayTime = "day";
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+            if (currentEvent == "ELECTION" && checkWon())
+                return [2 /*return*/];
+            currentEvent = nextEvent;
+            return [2 /*return*/];
+        });
+    });
+}
+function eventSleep(ms) {
+    return __awaiter(this, void 0, void 0, function () {
+        var lastEvent;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    lastEvent = currentEvent;
+                    currentEvent == "SLEEP";
+                    return [4 /*yield*/, sleep(ms)];
+                case 1:
+                    _a.sent();
+                    currentEvent = lastEvent;
+                    nextScheduleEvent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+var prompt = function () {
+    rl.question(">", function (name) {
+        switch (name) {
+            case "c":
+            case "clear":
+                console.clear();
+                break;
+            case "d":
+            case "dump":
+                console.log("gameCreation", gameCreation);
+                console.log("players", players);
+                console.log("currentEvent", currentEvent);
+                break;
+        }
+        prompt();
+    });
+};
+prompt();
 function shuffleArray(array) {
     for (var i = array.length - 1; i > 0; i--) {
         var j = Math.floor(Math.random() * (i + 1));
@@ -127,7 +230,7 @@ function baseRole(role) {
     }
 }
 function computeWon() {
-    if (players.filter(function (p) { return !p.inLove; }).length == 0) {
+    if (players.filter(function (p) { return !p.inLove; }).length == 0 && players.filter(function (p) { return p.inLove; }).length >= 2) {
         players.filter(function (p) { return p.inLove; }).forEach(function (p) { return (p.hasWon = true); });
         dead.filter(function (p) { return p.inLove; }).forEach(function (p) { return (p.hasWon = true); });
         console.log("inLove has won");
@@ -147,7 +250,7 @@ function computeWon() {
     }
     return "";
 }
-function computeDead() {
+function makeDead() {
     return __awaiter(this, void 0, void 0, function () {
         return __generator(this, function (_a) {
             players.forEach(function (p) {
@@ -162,16 +265,31 @@ function computeDead() {
                     players = players.filter(function (p2) { return p2.id != p.id; });
                 }
             });
-            currentEvent = "ANOUNCEMENT";
-            sleep(3000);
-            hasWon = computeWon();
-            if (hasWon)
-                currentEvent = "GAMEOVER";
-            else if (players.some(function (p) { return p.mayor; }))
-                currentEvent = "MAJOR";
-            else
-                currentEvent = "ELECTION";
             return [2 /*return*/];
+        });
+    });
+}
+function checkWon() {
+    hasWon = computeWon();
+    if (hasWon)
+        currentEvent = "GAMEOVER";
+    return !!hasWon;
+}
+function computeDead() {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    makeDead();
+                    //clear markings from last night
+                    players = players.map(function (p) { return (__assign(__assign({}, p), { deathmarked: undefined, protected: undefined })); });
+                    return [4 /*yield*/, sleep(3000)];
+                case 1:
+                    _a.sent();
+                    if (!checkWon())
+                        nextScheduleEvent();
+                    return [2 /*return*/];
+            }
         });
     });
 }
@@ -243,12 +361,12 @@ app.post("/event/AMOR", cors(), function (req, res) {
     console.log("AMOR " + req.body["id1"] + " + " + req.body["id2"]);
     players.find(function (u) { return u.id == req.body["id1"]; }).inLove = true;
     players.find(function (u) { return u.id == req.body["id2"]; }).inLove = true;
-    currentEvent = "SEER";
+    nextScheduleEvent();
     res.json({ status: "ok" });
 });
 app.post("/event/SEER", cors(), function (req, res) {
     console.log("SEER");
-    currentEvent = "WEREWOLF";
+    nextScheduleEvent();
     res.json({ status: "ok" });
 });
 app.post("/event/WITCH", cors(), function (req, res) {
@@ -259,15 +377,12 @@ app.post("/event/WITCH", cors(), function (req, res) {
         players.find(function (p) { return p.deathmarked; }).protected = true;
     }
     else {
+        //is death pot
         if (req.body.target) {
             req.user.hasKilled = true;
             players.find(function (p) { return p.id == req.body.target; }).deathmarked = true;
         }
-        currentEvent = "SLEEP";
-        dayTime = "day";
-        setTimeout(function () {
-            computeDead();
-        }, 3000);
+        eventSleep(3000);
     }
     res.json({ status: "ok" });
 });
@@ -279,7 +394,7 @@ app.post("/voteFor", cors(), function (req, res) {
         voting.votes.find(function (v) { return v.src == req.user.id; }).target = req.body.id;
     else
         voting.votes.push({ src: req.user.id, target: req.body.id });
-    var eligibilePlayers = currentEvent == "MAJOR" ? players : players.filter(function (p) { return p.role == "werewolf"; });
+    var eligibilePlayers = currentEvent == "WEREWOLF" ? players.filter(function (p) { return p.role == "werewolf"; }) : players;
     if (voting.votes.length == eligibilePlayers.length) {
         var chosen = false;
         var _loop_1 = function (user) {
@@ -287,40 +402,46 @@ app.post("/voteFor", cors(), function (req, res) {
                 voting.lockedIn = user.id;
                 console.log("locked in: " + user.id);
                 clearTimeout(lockedInTimeout);
-                if (currentEvent == "MAJOR")
+                if (currentEvent == "WEREWOLF")
                     lockedInTimeout = setTimeout(function () { return __awaiter(void 0, void 0, void 0, function () {
                         return __generator(this, function (_a) {
-                            switch (_a.label) {
-                                case 0:
-                                    console.log("thus the leader hath been chosen: " + user.id);
-                                    players.find(function (u) { return u.id == user.id; }).mayor = true;
-                                    voting.lockedIn = undefined;
-                                    voting.votes = [];
-                                    dayTime = "night";
-                                    currentEvent = "SLEEP";
-                                    return [4 /*yield*/, sleep(3000)];
-                                case 1:
-                                    _a.sent();
-                                    currentEvent = "AMOR";
-                                    return [2 /*return*/];
-                            }
+                            console.log("thus the victim hath been chosen: " + user.id);
+                            players.find(function (u) { return u.id == user.id; }).deathmarked = true;
+                            voting.lockedIn = undefined;
+                            voting.votes = [];
+                            dayTime = "night";
+                            eventSleep(3000);
+                            return [2 /*return*/];
                         });
                     }); }, 3000);
+                else if (currentEvent == "MAJOR") {
+                    lockedInTimeout = setTimeout(function () { return __awaiter(void 0, void 0, void 0, function () {
+                        return __generator(this, function (_a) {
+                            console.log("thus the leader hath been chosen: " + user.id);
+                            players.find(function (u) { return u.id == user.id; }).mayor = true;
+                            voting.lockedIn = undefined;
+                            voting.votes = [];
+                            if (isFirstRound)
+                                dayTime = "night";
+                            eventSleep(3000);
+                            return [2 /*return*/];
+                        });
+                    }); }, 3000);
+                }
                 else {
                     lockedInTimeout = setTimeout(function () { return __awaiter(void 0, void 0, void 0, function () {
                         return __generator(this, function (_a) {
                             switch (_a.label) {
                                 case 0:
-                                    console.log("thus the victim hath been chosen: " + user.id);
+                                    console.log("the hangee hath been chosen: " + user.id);
                                     players.find(function (u) { return u.id == user.id; }).deathmarked = true;
+                                    return [4 /*yield*/, makeDead()];
+                                case 1:
+                                    _a.sent();
                                     voting.lockedIn = undefined;
                                     voting.votes = [];
                                     dayTime = "night";
-                                    currentEvent = "SLEEP";
-                                    return [4 /*yield*/, sleep(3000)];
-                                case 1:
-                                    _a.sent();
-                                    currentEvent = "WITCH";
+                                    eventSleep(3000);
                                     return [2 /*return*/];
                             }
                         });
@@ -340,6 +461,6 @@ app.post("/voteFor", cors(), function (req, res) {
     }
     res.json({ status: "ok" });
 });
-app.listen(8000, function () {
-    console.log("Server running on port 8000");
+app.listen(8081, function () {
+    console.log("Server running on port 8081");
 });

@@ -73,7 +73,7 @@ Vue.prototype.choose = <T>(n: number, arr: Array<T>) => {
 
 axios.defaults.headers.common["Authorization"] = getItemOrElse("userIdentifier", (Math.random() + "").slice(2));
 
-new Vue({
+(window as any).vue = new Vue({
     router,
     render: h => h(App)
 }).$mount("#app");

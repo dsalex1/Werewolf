@@ -10,11 +10,11 @@ export const getItemOrElse = <T>(key: string, elseVal: T = {} as T) => {
 };
 
 const getAPI = async (path: string) => {
-    return (await axios.get("http://localhost:8000" + path)).data;
+    return (await axios.get("http://79.221.41.127:8081" + path)).data;
 };
 
 const postAPI = async (path: string, body: Record<string, any> = {}) => {
-    return (await axios.post("http://localhost:8000" + path, body)).data;
+    return (await axios.post("http://79.221.41.127:8081" + path, body)).data;
 };
 
 export const getUser = async (): Promise<User> => {

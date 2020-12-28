@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
+//run: tsc-watch server.ts --onSuccess "node server.js"
 console.clear();
 const express = require("express");
 const cors = require("cors");
 const app: App = express();
 import { User, GameCreation, Player, Players, Event, DayTime, Voting, Role } from "./src/Types";
-import { visitNodes } from "typescript";
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -29,35 +29,117 @@ console.log = (...args) => {
 app.options("*", cors());
 app.use(express.json());
 
+const readline = require("readline");
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
 const newUsers: Omit<User, "name">[] = [];
 
 let players: Player[] = [
-    /*
-    { id: "09007728297802164", name: "p2", state: "player", role: "witch", inLove: true },
-    { id: "5563432431161994", name: "p3", state: "player", role: "werewolf", inLove: true },
-    { id: "6473568877355735", name: "creator", state: "player", role: "seer", mayor: true, deathmarked: true },
-    { id: "6305879575129216", name: "p1", state: "player", role: "amor" }
-*/
+    { id: "20032798064716228", name: "creator", state: "player", role: "werewolf" },
+    //{ id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
+    { id: "39065619909131755", name: "p2", state: "player", role: "werewolf" },
+    { id: "3934182564683921", name: "p3", state: "player", role: "villager" }
 ];
 
 let dead: Player[] = [];
 
 const gameCreation: Omit<GameCreation, "players"> = {
     cards: {
-        werewolf: 0,
-        villager: 0,
+        werewolf: 3,
+        villager: 1,
         amor: 0,
         seer: 0,
         witch: 0
     },
-    started: false
+    started: true
 };
 
 const voting: Voting = { lockedIn: undefined, votes: [] };
 
-let currentEvent: Event = "MAJOR";
 let dayTime: DayTime = "day";
 let hasWon = "";
+
+let isFirstRound = true;
+let currentEvent: Event = "MAJOR";
+
+function skippingEvent(event: Event): boolean {
+    //if none left alive (or there in the first place) skip
+    switch (event) {
+        case "AMOR":
+        case "WEREWOLF":
+        case "WITCH":
+        case "SEER":
+            if (!players.some(p => p.role.toUpperCase() == event)) return true;
+    }
+
+    //role/event specific rules
+    switch (event) {
+        case "MAJOR":
+            if (players.some(p => p.mayor)) return true;
+            break;
+        case "ELECTION":
+            if (isFirstRound) return true;
+            break;
+        case "AMOR":
+            if (!isFirstRound) return true;
+            break;
+        case "WITCH":
+            if (players.find(p => p.role == "witch").hasHealed && players.find(p => p.role == "witch").hasKilled) return true;
+            break;
+    }
+    return false;
+}
+
+function getNextScheduleEvent(event: Event): Event {
+    const schedule: Event[] = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "ANOUNCEMENT"];
+    const currentScheduleIndex = schedule.findIndex(e => e == event);
+    const nextScheduleEvent = schedule[(currentScheduleIndex + 1) % schedule.length];
+    //after the first werewolf the first round is basically over
+    if (event == "WEREWOLF" && isFirstRound) isFirstRound = false;
+    if (skippingEvent(nextScheduleEvent)) {
+        return getNextScheduleEvent(nextScheduleEvent);
+    } else return nextScheduleEvent;
+}
+
+async function nextScheduleEvent() {
+    const nextEvent = getNextScheduleEvent(currentEvent);
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    if (nextEvent == "ANOUNCEMENT") computeDead();
+    if (nextEvent == "ANOUNCEMENT") dayTime = "day";
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    if (currentEvent == "ELECTION" && checkWon()) return;
+    currentEvent = nextEvent;
+}
+
+async function eventSleep(ms) {
+    const lastEvent = currentEvent;
+    currentEvent == "SLEEP";
+    await sleep(ms);
+    currentEvent = lastEvent;
+    nextScheduleEvent();
+}
+
+const prompt = () => {
+    rl.question(">", name => {
+        switch (name) {
+            case "c":
+            case "clear":
+                console.clear();
+                break;
+            case "d":
+            case "dump":
+                console.log("gameCreation", gameCreation);
+                console.log("players", players);
+                console.log("currentEvent", currentEvent);
+                break;
+        }
+        prompt();
+    });
+};
+prompt();
 
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -77,6 +159,7 @@ function startGame() {
 
     players.forEach((p, i) => (p.role = cards[i]));
 }
+
 function baseRole(role: Role): Role {
     switch (role) {
         case "amor":
@@ -89,7 +172,7 @@ function baseRole(role: Role): Role {
     }
 }
 function computeWon(): string {
-    if (players.filter(p => !p.inLove).length == 0) {
+    if (players.filter(p => !p.inLove).length == 0 && players.filter(p => p.inLove).length >= 2) {
         players.filter(p => p.inLove).forEach(p => (p.hasWon = true));
         dead.filter(p => p.inLove).forEach(p => (p.hasWon = true));
         console.log("inLove has won");
@@ -109,7 +192,7 @@ function computeWon(): string {
     }
     return "";
 }
-async function computeDead() {
+async function makeDead() {
     players.forEach(p => {
         console.log("testing :" + p);
         if (p.deathmarked && !p.protected) {
@@ -122,12 +205,20 @@ async function computeDead() {
             players = players.filter(p2 => p2.id != p.id);
         }
     });
-    currentEvent = "ANOUNCEMENT";
-    sleep(3000);
+}
+
+function checkWon(): boolean {
     hasWon = computeWon();
     if (hasWon) currentEvent = "GAMEOVER";
-    else if (players.some(p => p.mayor)) currentEvent = "MAJOR";
-    else currentEvent = "ELECTION";
+    return !!hasWon;
+}
+
+async function computeDead() {
+    makeDead();
+    //clear markings from last night
+    players = players.map(p => ({ ...p, deathmarked: undefined, protected: undefined }));
+    await sleep(3000);
+    if (!checkWon()) nextScheduleEvent();
 }
 
 app.get<Player | User>("/user", cors(), (req, res) => {
@@ -217,7 +308,7 @@ app.post("/event/AMOR", cors(), (req: reqType & { body: { id1: string; id2: stri
     players.find(u => u.id == req.body["id1"]).inLove = true;
     players.find(u => u.id == req.body["id2"]).inLove = true;
 
-    currentEvent = "SEER";
+    nextScheduleEvent();
 
     res.json({ status: "ok" });
 });
@@ -225,7 +316,7 @@ app.post("/event/AMOR", cors(), (req: reqType & { body: { id1: string; id2: stri
 app.post("/event/SEER", cors(), (req: reqType, res) => {
     console.log("SEER");
 
-    currentEvent = "WEREWOLF";
+    nextScheduleEvent();
     res.json({ status: "ok" });
 });
 
@@ -236,15 +327,13 @@ app.post("/event/WITCH", cors(), (req: reqType & { body: { pot: "heal" | "death"
         req.user.hasHealed = true;
         players.find(p => p.deathmarked)!.protected = true;
     } else {
+        //is death pot
         if (req.body.target) {
             req.user.hasKilled = true;
             players.find(p => p.id == req.body.target).deathmarked = true;
         }
-        currentEvent = "SLEEP";
-        dayTime = "day";
-        setTimeout(() => {
-            computeDead();
-        }, 3000);
+
+        eventSleep(3000);
     }
     res.json({ status: "ok" });
 });
@@ -257,7 +346,7 @@ app.post("/voteFor", cors(), (req: reqType & { body: { id: string } }, res) => {
     if (voting.votes.find(v => v.src == req.user.id)) voting.votes.find(v => v.src == req.user.id).target = req.body.id;
     else voting.votes.push({ src: req.user.id, target: req.body.id });
 
-    const eligibilePlayers = currentEvent == "MAJOR" ? players : players.filter(p => p.role == "werewolf");
+    const eligibilePlayers = currentEvent == "WEREWOLF" ? players.filter(p => p.role == "werewolf") : players;
     if (voting.votes.length == eligibilePlayers.length) {
         let chosen = false;
         for (const user of players) {
@@ -265,29 +354,36 @@ app.post("/voteFor", cors(), (req: reqType & { body: { id: string } }, res) => {
                 voting.lockedIn = user.id;
                 console.log("locked in: " + user.id);
                 clearTimeout(lockedInTimeout);
-                if (currentEvent == "MAJOR")
-                    lockedInTimeout = setTimeout(async () => {
-                        console.log("thus the leader hath been chosen: " + user.id);
-                        players.find(u => u.id == user.id).mayor = true;
-                        voting.lockedIn = undefined;
-                        voting.votes = [];
-                        dayTime = "night";
-                        currentEvent = "SLEEP";
-                        await sleep(3000);
-                        currentEvent = "AMOR";
-                    }, 3000);
-                else {
+                if (currentEvent == "WEREWOLF")
                     lockedInTimeout = setTimeout(async () => {
                         console.log("thus the victim hath been chosen: " + user.id);
                         players.find(u => u.id == user.id).deathmarked = true;
                         voting.lockedIn = undefined;
                         voting.votes = [];
                         dayTime = "night";
-                        currentEvent = "SLEEP";
-                        await sleep(3000);
-                        currentEvent = "WITCH";
+                        eventSleep(3000);
+                    }, 3000);
+                else if (currentEvent == "MAJOR") {
+                    lockedInTimeout = setTimeout(async () => {
+                        console.log("thus the leader hath been chosen: " + user.id);
+                        players.find(u => u.id == user.id).mayor = true;
+                        voting.lockedIn = undefined;
+                        voting.votes = [];
+                        if (isFirstRound) dayTime = "night";
+                        eventSleep(3000);
+                    }, 3000);
+                } else {
+                    lockedInTimeout = setTimeout(async () => {
+                        console.log("the hangee hath been chosen: " + user.id);
+                        players.find(u => u.id == user.id).deathmarked = true;
+                        await makeDead();
+                        voting.lockedIn = undefined;
+                        voting.votes = [];
+                        dayTime = "night";
+                        eventSleep(3000);
                     }, 3000);
                 }
+
                 chosen = true;
             }
         }
@@ -299,6 +395,6 @@ app.post("/voteFor", cors(), (req: reqType & { body: { id: string } }, res) => {
     res.json({ status: "ok" });
 });
 
-app.listen(8000, () => {
-    console.log("Server running on port 8000");
+app.listen(8081, () => {
+    console.log("Server running on port 8081");
 });

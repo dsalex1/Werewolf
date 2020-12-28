@@ -27,6 +27,7 @@ export type Player = User & {
     protected?: boolean;
     hasKilled?: boolean;
     hasWon?: boolean | Role | "inLove";
+    dead?: boolean;
 };
 export interface Players {
     self: Player;

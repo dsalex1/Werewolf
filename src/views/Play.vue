@@ -19,9 +19,14 @@
                             style="width:calc(4vw + 40px); position: absolute; left: 50%;top: 50%;transform: translate(-50%, -50%);"
                         >
                             <div style="position:relative;">
-                                <span v-if="voting.lockedIn == player.id" style="color: #289fa7;text-shadow: 1px 1px 3px #1e6383;">{{
-                                    lockedInCounter
-                                }}</span>
+                                <span
+                                    v-if="
+                                        voting.lockedIn == player.id &&
+                                            (currentEvent == 'MAJOR' || currentEvent == 'ELECTION' || self.role == 'werewolf')
+                                    "
+                                    style="color: #289fa7;text-shadow: 1px 1px 3px #1e6383;top: -30px;left: calc(50% - 5px);position: absolute;"
+                                    >{{ lockedInCounter }}
+                                </span>
                                 <img
                                     class="card-img-top"
                                     :class="{
@@ -29,10 +34,15 @@
                                         'deathmarked-card':
                                             player.deathmarked && (self.role == 'werewolf' || (self.role == 'witch' && !player.protected)),
                                         'selected-card': selections.some(s => s == player.id),
-                                        'selectedLocked-card': voting.lockedIn == player.id && (currentEvent == 'MAJOR' || self.role == 'werewolf')
+                                        'selectedLocked-card':
+                                            voting.lockedIn == player.id &&
+                                            (currentEvent == 'MAJOR' || currentEvent == 'ELECTION' || self.role == 'werewolf')
                                     }"
                                     :src="
-                                        player.id == self.id || player.id == seerSelected || player.dead
+                                        player.id == self.id ||
+                                        player.id == seerSelected ||
+                                        player.dead ||
+                                        (currentEvent == 'WEREWOLF' && player.role == 'werewolf' && self.role == 'werewolf')
                                             ? require('../assets/' + player.role + '.jpg')
                                             : require('../assets/backside.jpg')
                                     "
@@ -48,7 +58,11 @@
                                     style="width:1.5vw;height:1.5vw;border-radius:2px;position:absolute;left:4px;top:4px"
                                     :src="require('../assets/lovers.png')"
                                 />
-                                <div class="d-flex flex-wrap" style="position:absolute; top: 40%; left:0.54vw; width:calc(100% - 0.8vw); height:50%">
+                                <div
+                                    class="d-flex flex-wrap"
+                                    style="position:absolute; top: 40%; left:0.54vw; width:calc(100% - 0.8vw); height:50%"
+                                    v-if="currentEvent != 'WEREWOLF' || self.role == 'werewolf'"
+                                >
                                     <div
                                         v-for="j in Array.from(Array(getVotesPlayer(player)).keys())"
                                         :key="j"
@@ -73,6 +87,12 @@
                         <div v-else-if="currentEvent == 'MAJOR'" class="d-flex flex-column" style="width:70%">
                             <div class="alert alert-info">
                                 Wähle jemanden der Bürgermeister werden soll
+                                <div class="text text-muted">Es wird gewählt bis einer die absolute Mehrheit hat</div>
+                            </div>
+                        </div>
+                        <div v-else-if="currentEvent == 'ELECTION'" class="d-flex flex-column" style="width:70%">
+                            <div class="alert alert-danger">
+                                Wähle jemanden den ihr hängen wollt
                                 <div class="text text-muted">Es wird gewählt bis einer die absolute Mehrheit hat</div>
                             </div>
                         </div>
@@ -209,6 +229,7 @@ export default class Play extends Vue {
     showCurrentEvent() {
         switch (this.currentEvent) {
             case "MAJOR":
+            case "ELECTION":
                 return true;
             case "AMOR":
                 return this.self.role == "amor";
@@ -236,21 +257,25 @@ export default class Play extends Vue {
                 this.canSelectMultiple = true;
                 this.canSelect = this.self.role == "amor";
                 return;
+            case "ELECTION":
             case "MAJOR":
                 this.canSelect = true;
+                this.lockedInCounter = 3;
                 return;
             case "SEER":
                 this.canSelect = this.self.role == "seer";
+                this.seerSelected = null;
                 return;
             case "WEREWOLF":
                 this.canSelect = this.self.role == "werewolf";
+                this.lockedInCounter = 3;
                 return;
             case "WITCH":
                 this.canSelect = this.self.role == "witch" && (this.hasDecidedHeal || this.self.hasHealed!);
                 return;
         }
     }
-    @Watch("canSelect")
+    @Watch("currentEvent")
     unselectPlayers() {
         this.selections = [];
     }
@@ -311,6 +336,7 @@ export default class Play extends Vue {
     }
 
     async playerClicked(player: API.Player) {
+        if (this.dead.some(d => d.id == this.self.id)) return;
         if (!this.canSelect) return;
 
         if (this.selectedPlayers.some(p => p.id == player.id)) {
@@ -325,7 +351,8 @@ export default class Play extends Vue {
         switch (this.currentEvent) {
             case "WEREWOLF":
             case "MAJOR":
-                eligibilePlayers = this.currentEvent == "MAJOR" ? this.players : this.players.filter(p => p.role == "werewolf");
+            case "ELECTION":
+                eligibilePlayers = this.currentEvent == "WEREWOLF" ? this.players.filter(p => p.role == "werewolf") : this.players;
 
                 if (this.voting.votes.find(v => v.src == this.self.id)) this.voting.votes.find(v => v.src == this.self.id)!.target = player.id;
                 else this.voting.votes.push({ src: this.self.id, target: player.id });
@@ -365,6 +392,7 @@ export default class Play extends Vue {
     getVotesPlayer(player: API.Player) {
         switch (this.currentEvent) {
             case "MAJOR":
+            case "ELECTION":
             case "WEREWOLF":
                 return this.voting.votes.reduce((a, c) => a + (c.target == player.id ? 1 : 0), 0);
         }
