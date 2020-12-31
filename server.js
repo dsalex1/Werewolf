@@ -80,27 +80,41 @@ var rl = readline.createInterface({
 });
 var newUsers = [];
 var players = [
-    { id: "20032798064716228", name: "creator", state: "player", role: "werewolf" },
-    //{ id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
-    { id: "39065619909131755", name: "p2", state: "player", role: "werewolf" },
-    { id: "3934182564683921", name: "p3", state: "player", role: "villager" }
+/*
+{ id: "2571928494190281", name: "creator", state: "player", role: "seer" },
+{ id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
+{ id: "39065619909131755", name: "p2", state: "player", role: "witch" },
+{ id: "47864216841609", name: "p3", state: "player", role: "amor" }*/
 ];
 var dead = [];
+var newDeaths = [];
 var gameCreation = {
     cards: {
-        werewolf: 3,
-        villager: 1,
+        werewolf: 0,
+        villager: 0,
         amor: 0,
         seer: 0,
         witch: 0
     },
-    started: true
+    started: false
 };
 var voting = { lockedIn: undefined, votes: [] };
 var dayTime = "day";
 var hasWon = "";
 var isFirstRound = true;
 var currentEvent = "MAJOR";
+function softReset() {
+    currentEvent = "MAJOR";
+    dayTime = "day";
+    players = __spreadArrays(dead.map(function (d) { return ({ id: d.id, name: d.name, state: "waiting" }); }), players.map(function (d) { return ({ id: d.id, name: d.name, state: "waiting" }); }));
+    dead = [];
+    newUsers = [];
+    newDeaths = [];
+    gameCreation.started = false;
+    hasWon = "";
+    isFirstRound = true;
+    voting = { votes: [] };
+}
 function skippingEvent(event) {
     //if none left alive (or there in the first place) skip
     switch (event) {
@@ -133,7 +147,7 @@ function skippingEvent(event) {
     return false;
 }
 function getNextScheduleEvent(event) {
-    var schedule = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "ANOUNCEMENT"];
+    var schedule = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "SLEEP", "ANOUNCEMENT"];
     var currentScheduleIndex = schedule.findIndex(function (e) { return e == event; });
     var nextScheduleEvent = schedule[(currentScheduleIndex + 1) % schedule.length];
     //after the first werewolf the first round is basically over
@@ -150,11 +164,13 @@ function nextScheduleEvent() {
         var nextEvent;
         return __generator(this, function (_a) {
             nextEvent = getNextScheduleEvent(currentEvent);
+            if (nextEvent == "SLEEP")
+                dayTime = "day";
+            if (nextEvent == "SLEEP")
+                setTimeout(function () { return nextScheduleEvent(); }, 3000);
             // eslint-disable-next-line @typescript-eslint/no-use-before-define
             if (nextEvent == "ANOUNCEMENT")
                 computeDead();
-            if (nextEvent == "ANOUNCEMENT")
-                dayTime = "day";
             // eslint-disable-next-line @typescript-eslint/no-use-before-define
             if (currentEvent == "ELECTION" && checkWon())
                 return [2 /*return*/];
@@ -170,7 +186,7 @@ function eventSleep(ms) {
             switch (_a.label) {
                 case 0:
                     lastEvent = currentEvent;
-                    currentEvent == "SLEEP";
+                    currentEvent = "SLEEP";
                     return [4 /*yield*/, sleep(ms)];
                 case 1:
                     _a.sent();
@@ -251,23 +267,19 @@ function computeWon() {
     return "";
 }
 function makeDead() {
-    return __awaiter(this, void 0, void 0, function () {
-        return __generator(this, function (_a) {
-            players.forEach(function (p) {
-                console.log("testing :" + p);
-                if (p.deathmarked && !p.protected) {
-                    if (p.inLove) {
-                        dead = __spreadArrays(dead, players.filter(function (p) { return p.inLove; }).map(function (p) { return (__assign(__assign({}, p), { mayor: false })); }));
-                        players = players.filter(function (p) { return !p.inLove; });
-                        return;
-                    }
-                    dead = __spreadArrays(dead, players.filter(function (p2) { return p2.id == p.id; }).map(function (p) { return (__assign(__assign({}, p), { mayor: false })); }));
-                    players = players.filter(function (p2) { return p2.id != p.id; });
-                }
-            });
-            return [2 /*return*/];
-        });
+    var oldDead = __spreadArrays(dead);
+    players.forEach(function (p) {
+        if (p.deathmarked && !p.protected) {
+            if (p.inLove) {
+                dead = __spreadArrays(dead, players.filter(function (p) { return p.inLove; }).map(function (p) { return (__assign(__assign({}, p), { mayor: false })); }));
+                players = players.filter(function (p) { return !p.inLove; });
+                return;
+            }
+            dead = __spreadArrays(dead, players.filter(function (p2) { return p2.id == p.id; }).map(function (p) { return (__assign(__assign({}, p), { mayor: false })); }));
+            players = players.filter(function (p2) { return p2.id != p.id; });
+        }
     });
+    return dead.filter(function (d) { return !oldDead.some(function (o) { return o.id == d.id; }); });
 }
 function checkWon() {
     hasWon = computeWon();
@@ -280,10 +292,10 @@ function computeDead() {
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    makeDead();
+                    newDeaths = makeDead();
                     //clear markings from last night
                     players = players.map(function (p) { return (__assign(__assign({}, p), { deathmarked: undefined, protected: undefined })); });
-                    return [4 /*yield*/, sleep(3000)];
+                    return [4 /*yield*/, sleep(5000)];
                 case 1:
                     _a.sent();
                     if (!checkWon())
@@ -308,6 +320,19 @@ app.get("/user", cors(), function (req, res) {
         return res.json(players.find(function (u) { return u.id == req.headers.authorization; }));
     else
         return res.json(dead.find(function (u) { return u.id == req.headers.authorization; }));
+});
+app.post("/startNew", cors(), function (req, res) {
+    softReset();
+    players.find(function (u) { return u.id == req.headers.authorization; }).state = "creator";
+    res.json({ status: "ok" });
+});
+app.post("/kickUser", cors(), function (req, res) {
+    var _a;
+    var wasCreator = ((_a = players.find(function (p) { return p.id == req.body.id; })) === null || _a === void 0 ? void 0 : _a.state) == "creator";
+    players = players.filter(function (p) { return p.id != req.body.id; });
+    if (wasCreator && players[0])
+        players[0].state = "creator";
+    res.json({ status: "ok" });
 });
 app.post("/setName", cors(), function (req, res) {
     if (!newUsers.find(function (u) { return u.id == req.headers.authorization; }))
@@ -335,7 +360,10 @@ app.post("/setCreation", cors(), function (req, res) {
     res.json({ status: "ok" });
 });
 app.get("/creation", cors(), function (req, res) {
-    return res.json(__assign(__assign({}, gameCreation), { players: players.map(function (u) { return u.name; }) }));
+    return res.json(__assign(__assign({}, gameCreation), { players: players.map(function (u) { return ({
+            name: u.name,
+            id: u.id
+        }); }) }));
 });
 app.get("/players", cors(), function (req, res) {
     return res.json({
@@ -354,7 +382,9 @@ app.get("/gameState", cors(), function (req, res) {
         currentEvent: currentEvent,
         dayTime: dayTime,
         voting: voting,
-        hasWon: hasWon
+        hasWon: hasWon,
+        hasStarted: gameCreation.started,
+        newDeaths: newDeaths
     });
 });
 app.post("/event/AMOR", cors(), function (req, res) {
@@ -382,7 +412,7 @@ app.post("/event/WITCH", cors(), function (req, res) {
             req.user.hasKilled = true;
             players.find(function (p) { return p.id == req.body.target; }).deathmarked = true;
         }
-        eventSleep(3000);
+        nextScheduleEvent();
     }
     res.json({ status: "ok" });
 });

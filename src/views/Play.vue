@@ -84,6 +84,20 @@
                         <div v-if="!showCurrentEvent()" class="d-flex flex-column" style="width:70%">
                             <div class="alert alert-info">{{ dayTime == "night" ? "schlafen..." : "aufwachen..." }}</div>
                         </div>
+                        <div v-else-if="currentEvent == 'ANOUNCEMENT'" class="d-flex flex-column" style="width:70%">
+                            <div class="alert" :class="{ 'alert-danger': newDeaths.length > 0, 'alert-success': newDeaths.length == 0 }">
+                                Es {{ newDeaths.length > 1 ? "sind" : "ist" }}
+                                {{ newDeaths.length > 1 ? newDeaths.length : newDeaths.length > 0 ? "eine" : "keine" }}
+                                {{ newDeaths.length > 1 ? "Personen" : "Person" }}
+                                gestorben{{ newDeaths.length > 0 ? ":" : "." }} <br v-if="newDeaths.length > 0" />
+                                {{
+                                    newDeaths
+                                        .map(u => u.name)
+                                        .join(", ")
+                                        .replace(/, ([^,]*)$/, " und $1!")
+                                }}
+                            </div>
+                        </div>
                         <div v-else-if="currentEvent == 'MAJOR'" class="d-flex flex-column" style="width:70%">
                             <div class="alert alert-info">
                                 Wähle jemanden der Bürgermeister werden soll
@@ -147,6 +161,7 @@
                                 }}
                                 gewonnen
                             </div>
+                            <button class="btn btn-primary button-block" @click="startNew()">Start new Game</button>
                         </div>
                         <!--
                         <div class="d-flex flex-column" style="width:70%">
@@ -167,16 +182,16 @@
         </div>
         <div class="col-4">
             <div class="card">
-                <div class="card-header">Your Role</div>
+                <div class="card-header">Deine Rolle</div>
                 <div class="card-body d-flex flex-column">
                     <div class="card text-center align-self-center" style="max-width:50%">
                         <img class="card-img-top" :src="require('../assets/' + self.role + '.jpg')" style="border-radius:5px" />
-                        <div class="card-footer vertical-align-center">{{ self.role }}</div>
+                        <div class="card-footer vertical-align-center">{{ getDescription(self.role, "name") }}</div>
                     </div>
-                    <h6 class="card-subtitle mt-2 mb-2 text-muted">Description</h6>
-                    <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-                    <h6 class="card-subtitle mb-2 text-muted">Objective</h6>
-                    <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+                    <h6 class="card-subtitle mt-2 mb-2 text-muted">Beschreibung</h6>
+                    <p class="card-text">{{ getDescription(self.role, "description") }}</p>
+                    <h6 class="card-subtitle mb-2 text-muted">Ziel</h6>
+                    <p class="card-text">{{ getDescription(self.role, "objective") }}</p>
                 </div>
             </div>
         </div>
@@ -187,7 +202,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { Component, Vue, Watch } from "vue-property-decorator";
 import * as API from "../API";
-
+import { roleDescriptions } from "../roleDescriptions";
 declare let $: any;
 
 @Component({})
@@ -208,6 +223,7 @@ export default class Play extends Vue {
     private seerSelected: string | null = null;
     private hasDecidedHeal = false;
     private hasWon = "";
+    private newDeaths: API.Player[] = [];
 
     ellipsisCorrection(x: number) {
         // with b=2: x-((-1+Math.sqrt(b))*Math.cos(x)*Math.sin(x))/(1+Math.sqrt(b))
@@ -228,6 +244,7 @@ export default class Play extends Vue {
 
     showCurrentEvent() {
         switch (this.currentEvent) {
+            case "ANOUNCEMENT":
             case "MAJOR":
             case "ELECTION":
                 return true;
@@ -325,6 +342,11 @@ export default class Play extends Vue {
             this.currentEvent = req.currentEvent;
             this.dayTime = req.dayTime;
             this.hasWon = req.hasWon;
+            this.newDeaths = req.newDeaths;
+            if (req.hasStarted == false) {
+                clearInterval(this.interval);
+                this.$router.push("/waiting");
+            }
         };
         await update();
         this.loading = false;
@@ -405,6 +427,12 @@ export default class Play extends Vue {
             1,
             { ...player, ...data }
         );
+    }
+    async startNew() {
+        await API.startNew();
+    }
+    getDescription(role: API.Role, type: "name" | "description" | "objective") {
+        return roleDescriptions.find(d => d.id == role)[type];
     }
 }
 </script>

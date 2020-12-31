@@ -1,6 +1,6 @@
 import axios from "axios";
 export * from "./Types";
-import { User, GameCreation, Players, DayTime, Voting, Event } from "./Types";
+import { User, GameCreation, Players, DayTime, Voting, Event, Player } from "./Types";
 
 export const getItemOrElse = <T>(key: string, elseVal: T = {} as T) => {
     const val = localStorage.getItem(key);
@@ -19,6 +19,10 @@ const postAPI = async (path: string, body: Record<string, any> = {}) => {
 
 export const getUser = async (): Promise<User> => {
     return getAPI("/user");
+};
+
+export const kickUser = async (id: string): Promise<User> => {
+    return postAPI("/kickUser", { id });
 };
 
 export const setName = async (name: string): Promise<void> => {
@@ -41,10 +45,22 @@ export const event = async (type: Event, data?: Record<string, any>): Promise<Pl
     return postAPI("/event/" + type, data);
 };
 
-export const getGameState = async (): Promise<{ players: Players; currentEvent: Event; dayTime: DayTime; voting: Voting; hasWon: string }> => {
+export const getGameState = async (): Promise<{
+    players: Players;
+    currentEvent: Event;
+    dayTime: DayTime;
+    voting: Voting;
+    hasWon: string;
+    hasStarted: boolean;
+    newDeaths: Player[];
+}> => {
     return getAPI("/gameState");
 };
 
 export const voteFor = async (id: string): Promise<void> => {
     return postAPI("/voteFor", { id });
+};
+
+export const startNew = async (): Promise<void> => {
+    return postAPI("/startNew");
 };

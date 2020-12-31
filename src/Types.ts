@@ -15,7 +15,7 @@ export interface GameCreation {
         seer: number;
         witch: number;
     };
-    players: string[];
+    players: { name: string; id: string }[];
     started: boolean;
 }
 

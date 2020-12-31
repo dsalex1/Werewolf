@@ -34,8 +34,11 @@
                     <h5 class="card-title">Total: {{ creation.players.length }}</h5>
                     <table class="table table-striped">
                         <tbody>
-                            <tr v-for="name in creation.players" :key="name">
-                                <td>{{ name }}</td>
+                            <tr v-for="player in creation.players" :key="player.id">
+                                <td>
+                                    <span>{{ player.name }}</span>
+                                    <button @click="kick(player.id)" class="btn btn-danger float-right"><i class="fas fa-user-times"></i></button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -56,14 +59,25 @@ import * as API from "../API";
 export default class Create extends Vue {
     private creation: API.GameCreation = { cards: { werewolf: 0, villager: 0, amor: 0, seer: 0, witch: 0 }, players: [], started: false };
     private interval = -1;
+    private user!: API.User;
 
     @Watch("creation", { deep: true })
     onCreationChanged(creation: API.GameCreation) {
         API.setGameCreation(creation);
     }
+
+    @Watch("user", { deep: true })
+    onUserChanged() {
+        if (this.user.state == "waiting") this.$router.push("/waiting");
+        if (this.user.state == "new") this.$router.push("/");
+    }
     async mounted() {
+        this.user = await API.getUser();
         this.creation = await API.getGameCreation();
-        this.interval = setInterval(async () => (this.creation.players = (await API.getGameCreation()).players), 1000);
+        this.interval = setInterval(async () => {
+            this.creation.players = (await API.getGameCreation()).players;
+            this.user = await API.getUser();
+        }, 1000);
     }
     async destroyed() {
         clearInterval(this.interval);
@@ -74,6 +88,10 @@ export default class Create extends Vue {
     async startGame() {
         API.setGameCreation({ ...this.creation, started: true });
         this.$router.push("play");
+    }
+    async kick(id: string) {
+        await API.kickUser(id);
+        if (this.user.id == id) (location as any).reload();
     }
 }
 </script>

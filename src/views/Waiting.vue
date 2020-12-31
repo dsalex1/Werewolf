@@ -26,8 +26,8 @@
                     <h5 class="card-title">Total: {{ creation.players.length }}</h5>
                     <table class="table table-striped">
                         <tbody>
-                            <tr v-for="name in creation.players" :key="name">
-                                <td>{{ name }}</td>
+                            <tr v-for="player in creation.players" :key="player.id">
+                                <td>{{ player.name }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -49,14 +49,26 @@ import * as API from "../API";
 export default class Waiting extends Vue {
     private creation: API.GameCreation = { cards: {} as any, players: [], started: false };
     private interval = -1;
+    private user: API.User = null!;
 
     @Watch("creation", { deep: true })
     onCreationChanged(creation: API.GameCreation) {
         if (creation.started) this.$router.push("play");
     }
+    @Watch("user", { deep: true })
+    onUserChanged() {
+        console.log(this.user, "it changed");
+        if (this.user.state == "creator") this.$router.push("/create");
+        if (this.user.state == "new") this.$router.push("/");
+    }
     async mounted() {
+        this.user = await API.getUser();
         this.creation = await API.getGameCreation();
-        this.interval = setInterval(async () => (this.creation = await API.getGameCreation()), 1000);
+        this.interval = setInterval(async () => {
+            this.creation = await API.getGameCreation();
+            this.user = await API.getUser();
+            console.log(this.user.state);
+        }, 1000);
     }
     async destroyed() {
         clearInterval(this.interval);

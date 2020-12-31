@@ -35,35 +35,53 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-const newUsers: Omit<User, "name">[] = [];
+let newUsers: Omit<User, "name">[] = [];
 
 let players: Player[] = [
-    { id: "20032798064716228", name: "creator", state: "player", role: "werewolf" },
-    //{ id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
-    { id: "39065619909131755", name: "p2", state: "player", role: "werewolf" },
-    { id: "3934182564683921", name: "p3", state: "player", role: "villager" }
+    /*
+    { id: "2571928494190281", name: "creator", state: "player", role: "seer" },
+    { id: "09007728297802164", name: "p1", state: "player", role: "werewolf" },
+    { id: "39065619909131755", name: "p2", state: "player", role: "witch" },
+    { id: "47864216841609", name: "p3", state: "player", role: "amor" }*/
 ];
 
 let dead: Player[] = [];
+let newDeaths: Player[] = [];
 
 const gameCreation: Omit<GameCreation, "players"> = {
     cards: {
-        werewolf: 3,
-        villager: 1,
+        werewolf: 0,
+        villager: 0,
         amor: 0,
         seer: 0,
         witch: 0
     },
-    started: true
+    started: false
 };
 
-const voting: Voting = { lockedIn: undefined, votes: [] };
+let voting: Voting = { lockedIn: undefined, votes: [] };
 
 let dayTime: DayTime = "day";
 let hasWon = "";
 
 let isFirstRound = true;
 let currentEvent: Event = "MAJOR";
+
+function softReset() {
+    currentEvent = "MAJOR";
+    dayTime = "day";
+    players = [
+        ...dead.map(d => ({ id: d.id, name: d.name, state: "waiting" as const })),
+        ...players.map(d => ({ id: d.id, name: d.name, state: "waiting" as const }))
+    ];
+    dead = [];
+    newUsers = [];
+    newDeaths = [];
+    gameCreation.started = false;
+    hasWon = "";
+    isFirstRound = true;
+    voting = { votes: [] };
+}
 
 function skippingEvent(event: Event): boolean {
     //if none left alive (or there in the first place) skip
@@ -94,7 +112,7 @@ function skippingEvent(event: Event): boolean {
 }
 
 function getNextScheduleEvent(event: Event): Event {
-    const schedule: Event[] = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "ANOUNCEMENT"];
+    const schedule: Event[] = ["MAJOR", "ELECTION", "AMOR", "SEER", "WEREWOLF", "WITCH", "SLEEP", "ANOUNCEMENT"];
     const currentScheduleIndex = schedule.findIndex(e => e == event);
     const nextScheduleEvent = schedule[(currentScheduleIndex + 1) % schedule.length];
     //after the first werewolf the first round is basically over
@@ -106,17 +124,20 @@ function getNextScheduleEvent(event: Event): Event {
 
 async function nextScheduleEvent() {
     const nextEvent = getNextScheduleEvent(currentEvent);
+
+    if (nextEvent == "SLEEP") dayTime = "day";
+    if (nextEvent == "SLEEP") setTimeout(() => nextScheduleEvent(), 3000);
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     if (nextEvent == "ANOUNCEMENT") computeDead();
-    if (nextEvent == "ANOUNCEMENT") dayTime = "day";
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     if (currentEvent == "ELECTION" && checkWon()) return;
+
     currentEvent = nextEvent;
 }
 
 async function eventSleep(ms) {
     const lastEvent = currentEvent;
-    currentEvent == "SLEEP";
+    currentEvent = "SLEEP";
     await sleep(ms);
     currentEvent = lastEvent;
     nextScheduleEvent();
@@ -192,9 +213,9 @@ function computeWon(): string {
     }
     return "";
 }
-async function makeDead() {
+function makeDead() {
+    const oldDead = [...dead];
     players.forEach(p => {
-        console.log("testing :" + p);
         if (p.deathmarked && !p.protected) {
             if (p.inLove) {
                 dead = [...dead, ...players.filter(p => p.inLove).map(p => ({ ...p, mayor: false }))];
@@ -205,6 +226,7 @@ async function makeDead() {
             players = players.filter(p2 => p2.id != p.id);
         }
     });
+    return dead.filter(d => !oldDead.some(o => o.id == d.id));
 }
 
 function checkWon(): boolean {
@@ -214,10 +236,10 @@ function checkWon(): boolean {
 }
 
 async function computeDead() {
-    makeDead();
+    newDeaths = makeDead();
     //clear markings from last night
     players = players.map(p => ({ ...p, deathmarked: undefined, protected: undefined }));
-    await sleep(3000);
+    await sleep(5000);
     if (!checkWon()) nextScheduleEvent();
 }
 
@@ -235,6 +257,19 @@ app.get<Player | User>("/user", cors(), (req, res) => {
     if (newUsers.find(u => u.id == req.headers.authorization)) return res.json(newUsers.find(u => u.id == req.headers.authorization));
     else if (players.find(u => u.id == req.headers.authorization)) return res.json(players.find(u => u.id == req.headers.authorization));
     else return res.json(dead.find(u => u.id == req.headers.authorization));
+});
+
+app.post("/startNew", cors(), (req: reqType, res) => {
+    softReset();
+    players.find(u => u.id == req.headers.authorization).state = "creator";
+    res.json({ status: "ok" });
+});
+
+app.post("/kickUser", cors(), (req: reqType & { body: { id: string } }, res) => {
+    const wasCreator = players.find(p => p.id == req.body.id)?.state == "creator";
+    players = players.filter(p => p.id != req.body.id);
+    if (wasCreator && players[0]) players[0].state = "creator";
+    res.json({ status: "ok" });
 });
 
 app.post("/setName", cors(), (req: reqType & { body: { name: string } }, res) => {
@@ -274,7 +309,10 @@ app.post("/setCreation", cors(), (req: reqType & { body: GameCreation }, res) =>
 app.get<GameCreation>("/creation", cors(), (req, res) =>
     res.json({
         ...gameCreation,
-        players: players.map(u => u.name)
+        players: players.map(u => ({
+            name: u.name,
+            id: u.id
+        }))
     })
 );
 
@@ -289,18 +327,23 @@ app.get<Players>("/players", cors(), (req, res) =>
     })
 );
 
-app.get<{ players: Players; currentEvent: Event; dayTime: DayTime; voting: Voting; hasWon: string }>("/gameState", cors(), (req, res) =>
-    res.json({
-        players: {
-            self: players.find(u => u.id == req.headers.authorization) || dead.find(u => u.id == req.headers.authorization),
-            players,
-            dead
-        },
-        currentEvent,
-        dayTime,
-        voting,
-        hasWon
-    })
+app.get<{ players: Players; currentEvent: Event; dayTime: DayTime; voting: Voting; hasWon: string; hasStarted: boolean; newDeaths: Player[] }>(
+    "/gameState",
+    cors(),
+    (req, res) =>
+        res.json({
+            players: {
+                self: players.find(u => u.id == req.headers.authorization) || dead.find(u => u.id == req.headers.authorization),
+                players,
+                dead
+            },
+            currentEvent,
+            dayTime,
+            voting,
+            hasWon,
+            hasStarted: gameCreation.started,
+            newDeaths
+        })
 );
 
 app.post("/event/AMOR", cors(), (req: reqType & { body: { id1: string; id2: string } }, res) => {
@@ -333,7 +376,7 @@ app.post("/event/WITCH", cors(), (req: reqType & { body: { pot: "heal" | "death"
             players.find(p => p.id == req.body.target).deathmarked = true;
         }
 
-        eventSleep(3000);
+        nextScheduleEvent();
     }
     res.json({ status: "ok" });
 });
