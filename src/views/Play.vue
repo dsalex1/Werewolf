@@ -432,7 +432,7 @@ export default class Play extends Vue {
         await API.startNew();
     }
     getDescription(role: API.Role, type: "name" | "description" | "objective") {
-        return roleDescriptions.find(d => d.id == role)[type];
+        return roleDescriptions.find(d => d.id == role)![type];
     }
 }
 </script>
